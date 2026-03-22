@@ -15,6 +15,7 @@ import {
   VoiceActivityDetector,
   processVoiceTurn,
 } from "@/lib/ai-service"
+import { SYSTEM_PROMPT, buildContextualPrompt } from "@/lib/ai-config"
 
 type OrbState = "idle" | "listening" | "thinking" | "speaking"
 
@@ -133,13 +134,19 @@ export function VoiceAssistantScreen() {
           setOrbState("thinking")
           
           try {
-            // Get system prompt for current mode
-            const systemPrompt = MODE_SYSTEM_PROMPTS[mode] + 
-              " Keep responses concise — 1-2 sentences max for voice interaction.";
+            const history = getRecentContext(10);
+            let contextualPrompt = buildContextualPrompt(userText || "", SYSTEM_PROMPT);
+            if (history.length > 0) {
+              const historyText = history
+                .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
+                .join('\n');
+              contextualPrompt += `\n\nRecent Conversation History:\n${historyText}`;
+            }
 
             // Process the voice turn
-            await processVoiceTurn(audioData, systemPrompt, {
+            await processVoiceTurn(audioData, contextualPrompt, {
               onTranscription: (text) => {
+                console.log("LLM INPUT:", text)
                 setUserText(text)
                 addUserMessage(text)
               },

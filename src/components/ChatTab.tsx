@@ -3,6 +3,7 @@ import { ModelCategory } from '@runanywhere/web';
 import { TextGeneration } from '@runanywhere/web-llamacpp';
 import { useModelLoader } from '../hooks/useModelLoader';
 import { ModelBanner } from './ModelBanner';
+import { SYSTEM_PROMPT, GENERATION_CONFIG, buildContextualPrompt, guardrails } from '../../frontend/lib/ai-config';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -41,10 +42,26 @@ export function ChatTab() {
     const assistantIdx = messages.length + 1;
     setMessages((prev) => [...prev, { role: 'assistant', text: '' }]);
 
+    const blocked = guardrails(text);
+    if (blocked) {
+      setMessages((prev) => {
+        const updated = [...prev];
+        updated[assistantIdx] = { role: 'assistant', text: blocked };
+        return updated;
+      });
+      setGenerating(false);
+      return;
+    }
+
+    const contextualPrompt = buildContextualPrompt(text, SYSTEM_PROMPT);
+
+    console.log("LLM INPUT:", text);
     try {
       const { stream, result: resultPromise, cancel } = await TextGeneration.generateStream(text, {
-        maxTokens: 512,
-        temperature: 0.7,
+        systemPrompt: contextualPrompt,
+        maxTokens: GENERATION_CONFIG.maxTokens,
+        temperature: GENERATION_CONFIG.temperature,
+        topP: GENERATION_CONFIG.topP,
       });
       cancelRef.current = cancel;
 

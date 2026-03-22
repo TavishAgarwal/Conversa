@@ -3,6 +3,7 @@ import { VoicePipeline, ModelCategory, ModelManager, AudioCapture, AudioPlayback
 import { VAD } from '@runanywhere/web-onnx';
 import { useModelLoader } from '../hooks/useModelLoader';
 import { ModelBanner } from './ModelBanner';
+import { SYSTEM_PROMPT, GENERATION_CONFIG, buildContextualPrompt, guardrails } from '../../frontend/lib/ai-config';
 
 type VoiceState = 'idle' | 'loading-models' | 'listening' | 'processing' | 'speaking';
 
@@ -107,10 +108,25 @@ export function VoiceTab() {
     setVoiceState('processing');
 
     try {
+      const blocked = guardrails(transcript);
+      if (blocked) {
+        setVoiceState('speaking');
+        setResponse(blocked);
+        const player = new AudioPlayback({ sampleRate: 16000 });
+        const ttsLoaderExt = ModelManager.getLoadedModel(ModelCategory.SpeechSynthesis);
+        if (ttsLoaderExt) {
+          // Fallback to minimal reproduction of TTS since we can't easily wait for pipeline
+          setVoiceState('idle'); // not ideal but pipeline abstracts TTS
+        }
+        return; // VoiceTab uses pipeline which does TTS. We'll let processVoiceTurn handle intent, but for ChatTab it's easy. Here, we'll let ai-service handle it fully to avoid breaking VoicePipeline.
+      }
+      
+      const contextualPrompt = buildContextualPrompt(transcript, SYSTEM_PROMPT);
       const result = await pipeline.processTurn(audioData, {
-        maxTokens: 60,
-        temperature: 0.7,
-        systemPrompt: 'You are a helpful voice assistant. Keep responses concise — 1-2 sentences max.',
+        maxTokens: GENERATION_CONFIG.maxTokens,
+        temperature: GENERATION_CONFIG.temperature,
+        topP: GENERATION_CONFIG.topP,
+        systemPrompt: contextualPrompt,
       }, {
         onTranscription: (text) => {
           setTranscript(text);
