@@ -55,10 +55,17 @@ export function ChatTab() {
 
     const contextualPrompt = buildContextualPrompt(text, SYSTEM_PROMPT);
 
-    console.log("LLM INPUT:", text);
+    // Build the full conversation history array as a string for context
+    let historyText = "";
+    if (messages.length > 0) {
+      historyText = "\n\nConversation History:\n" + messages.map(msg => 
+        `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.text}`
+      ).join("\n");
+    }
+
     try {
       const { stream, result: resultPromise, cancel } = await TextGeneration.generateStream(text, {
-        systemPrompt: contextualPrompt,
+        systemPrompt: contextualPrompt + historyText,
         maxTokens: GENERATION_CONFIG.maxTokens,
         temperature: GENERATION_CONFIG.temperature,
         topP: GENERATION_CONFIG.topP,

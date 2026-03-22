@@ -57,19 +57,34 @@ export function useModelLoader(category: ModelCategory, coexist = false): ModelL
           }
         });
 
-        await ModelManager.downloadModel(model.id);
+        try {
+          await ModelManager.downloadModel(model.id);
+        } catch (downloadErr) {
+          setError("Model download failed — check your connection and try again.");
+          setState('error');
+          unsub();
+          return false;
+        }
         unsub();
         setProgress(1);
       }
 
       // Load
       setState('loading');
-      const ok = await ModelManager.loadModel(model.id, { coexist });
+      let ok = false;
+      try {
+        ok = await ModelManager.loadModel(model.id, { coexist });
+      } catch (loadErr) {
+        setError("Model load failed — an unexpected error occurred.");
+        setState('error');
+        return false;
+      }
+
       if (ok) {
         setState('ready');
         return true;
       } else {
-        setError('Failed to load model');
+        setError("Model load failed — an unexpected error occurred.");
         setState('error');
         return false;
       }

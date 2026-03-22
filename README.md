@@ -1,116 +1,45 @@
-# RunAnywhere Web Starter App
+# Conversa
 
-A minimal React + TypeScript starter app demonstrating **on-device AI in the browser** using the [`@runanywhere/web`](https://www.npmjs.com/package/@runanywhere/web) SDK. All inference runs locally via WebAssembly — no server, no API key, 100% private.
+Voice conversations with AI — 100% on your device. Zero cloud. Zero cost. Zero compromise on privacy.
 
-## Features
+## Why Conversa?
 
-| Tab | What it does |
-|-----|-------------|
-| **Chat** | Stream text from an on-device LLM (LFM2 350M) |
-| **Vision** | Point your camera and describe what the VLM sees (LFM2-VL 450M) |
-| **Voice** | Speak naturally — VAD detects speech, STT transcribes, LLM responds, TTS speaks back |
+In a world dependent on cloud APIs and expensive subscriptions, Conversa brings the power of voice-first conversational AI directly to your local device.
+
+- **Offline**: Works anywhere, anytime. No internet connection required once initialized.
+- **Private**: All audio and text processing happens directly in your browser. Audio never leaves your device.
+- **Fast**: Near-zero latency since there is no network overhead for streaming responses and generating speech.
+
+## How it works
+
+Conversa leverages WebAssembly to run advanced neural networks locally within the browser:
+
+```
+[ Your Voice ] 
+       │ 
+       ▼ 
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│  Sherpa ONNX │     │  Llama.cpp   │     │  Sherpa ONNX │
+│  (VAD & STT) ├────►│  (LLM Engine)├────►│     (TTS)    │
+└──────────────┘     └──────────────┘     └──────────────┘
+       │                    │                    │
+  Detect Speech       Process Context       Synthesize Voice
+```
+
+1. **VAD & STT**: Voice Activity Detection intelligently listens, and Offline Speech-to-Text transcribes your spoken words.
+2. **LLM**: Your transcribed request alongside conversation context is sent to a localized language model. 
+3. **TTS**: The text response is streamed into our Text-to-Speech Engine and played back dynamically.
 
 ## Quick Start
+
+Initialize and run the development server:
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Models are downloaded on first use and cached in the browser's Origin Private File System (OPFS).
-
-## How It Works
-
-```
-@runanywhere/web (npm package)
-  ├── WASM engine (llama.cpp, whisper.cpp, sherpa-onnx)
-  ├── Model management (download, OPFS cache, load/unload)
-  └── TypeScript API (TextGeneration, STT, TTS, VAD, VLM, VoicePipeline)
-```
-
-The app imports everything from `@runanywhere/web`:
-
-```typescript
-import { RunAnywhere, SDKEnvironment } from '@runanywhere/web';
-import { TextGeneration, VLMWorkerBridge } from '@runanywhere/web-llamacpp';
-
-await RunAnywhere.initialize({ environment: SDKEnvironment.Development });
-
-// Stream LLM text
-const { stream } = await TextGeneration.generateStream('Hello!', { maxTokens: 200 });
-for await (const token of stream) { console.log(token); }
-
-// VLM: describe an image
-const result = await VLMWorkerBridge.shared.process(rgbPixels, width, height, 'Describe this.');
-```
-
-## Project Structure
-
-```
-src/
-├── main.tsx              # React root
-├── App.tsx               # Tab navigation (Chat | Vision | Voice)
-├── runanywhere.ts        # SDK init + model catalog + VLM worker
-├── workers/
-│   └── vlm-worker.ts     # VLM Web Worker entry (2 lines)
-├── hooks/
-│   └── useModelLoader.ts # Shared model download/load hook
-├── components/
-│   ├── ChatTab.tsx        # LLM streaming chat
-│   ├── VisionTab.tsx      # Camera + VLM inference
-│   ├── VoiceTab.tsx       # Full voice pipeline
-│   └── ModelBanner.tsx    # Download progress UI
-└── styles/
-    └── index.css          # Dark theme CSS
-```
-
-## Adding Your Own Models
-
-Edit the `MODELS` array in `src/runanywhere.ts`:
-
-```typescript
-{
-  id: 'my-custom-model',
-  name: 'My Model',
-  repo: 'username/repo-name',           // HuggingFace repo
-  files: ['model.Q4_K_M.gguf'],         // Files to download
-  framework: LLMFramework.LlamaCpp,
-  modality: ModelCategory.Language,      // or Multimodal, SpeechRecognition, etc.
-  memoryRequirement: 500_000_000,        // Bytes
-}
-```
-
-Any GGUF model compatible with llama.cpp works for LLM/VLM. STT/TTS/VAD use sherpa-onnx models.
-
-## Deployment
-
-### Vercel
-
-```bash
-npm run build
-npx vercel --prod
-```
-
-The included `vercel.json` sets the required Cross-Origin-Isolation headers.
-
-### Netlify
-
-Add a `_headers` file:
-
-```
-/*
-  Cross-Origin-Opener-Policy: same-origin
-  Cross-Origin-Embedder-Policy: credentialless
-```
-
-### Any static host
-
-Serve the `dist/` folder with these HTTP headers on all responses:
-
-```
-Cross-Origin-Opener-Policy: same-origin
-Cross-Origin-Embedder-Policy: credentialless
-```
+Open [http://localhost:5173](http://localhost:5173). 
 
 ## Browser Requirements
 
@@ -119,12 +48,5 @@ Cross-Origin-Embedder-Policy: credentialless
 - SharedArrayBuffer (requires Cross-Origin Isolation headers)
 - OPFS (for persistent model cache)
 
-## Documentation
-
-- [SDK API Reference](https://docs.runanywhere.ai)
-- [npm package](https://www.npmjs.com/package/@runanywhere/web)
-- [GitHub](https://github.com/RunanywhereAI/runanywhere-sdks)
-
-## License
-
-MIT
+---
+*Built for HackXtreme 2026 @ Microsoft*

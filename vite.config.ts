@@ -63,8 +63,8 @@ export default defineConfig({
   plugins: [react(), copyWasmPlugin()],
   server: {
     headers: {
-      // Cross-Origin Isolation — required for SharedArrayBuffer / multi-threaded WASM.
-      // Without these headers the SDK falls back to single-threaded mode.
+      // Cross-Origin Isolation — required for SharedArrayBuffer (used by the WASM engine).
+      // Without them the app silently breaks in production.
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'credentialless',
     },
