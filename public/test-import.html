@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WASM Import Test</title>
+</head>
+<body>
+    <h1>Testing Dynamic Import of WASM Modules</h1>
+    <div id="log"></div>
+    
+    <script type="module">
+        const log = document.getElementById('log');
+        
+        function addLog(msg, type = 'info') {
+            const p = document.createElement('p');
+            p.textContent = `[${type.toUpperCase()}] ${msg}`;
+            p.style.color = type === 'error' ? 'red' : type === 'success' ? 'green' : 'black';
+            log.appendChild(p);
+        }
+        
+        async function testImport() {
+            try {
+                addLog('Testing dynamic import...');
+                
+                // Test 1: Import with full URL
+                const url1 = 'http://localhost:3000/assets/racommons-llamacpp.js';
+                addLog(`Attempting to import: ${url1}`);
+                
+                const module1 = await import(url1);
+                addLog('SUCCESS: Module imported!', 'success');
+                addLog(`Module default export: ${typeof module1.default}`);
+                
+                // Test if we can call it
+                if (typeof module1.default === 'function') {
+                    addLog('Attempting to call createModule function...');
+                    const instance = await module1.default({
+                        print: (text) => addLog(`WASM: ${text}`),
+                        printErr: (text) => addLog(`WASM ERROR: ${text}`, 'error'),
+                        locateFile: (path) => {
+                            const located = `http://localhost:3000/assets/${path}`;
+                            addLog(`Locating file: ${path} -> ${located}`);
+                            return located;
+                        }
+                    });
+                    addLog('WASM module instantiated successfully!', 'success');
+                }
+                
+            } catch (error) {
+                addLog(`ERROR: ${error.message}`, 'error');
+                addLog(`Stack: ${error.stack}`, 'error');
+            }
+        }
+        
+        testImport();
+    </script>
+</body>
+</html>

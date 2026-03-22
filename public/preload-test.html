@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>WASM Loader</title>
+</head>
+<body>
+    <h1>Pre-loading WASM Modules...</h1>
+    <div id="status"></div>
+    
+    <script>
+        const status = document.getElementById('status');
+        
+        function log(msg, isError = false) {
+            const p = document.createElement('p');
+            p.textContent = msg;
+            p.style.color = isError ? 'red' : 'green';
+            status.appendChild(p);
+            console.log(msg);
+        }
+
+        async function loadModules() {
+            const modules = [
+                { url: '/assets/racommons-llamacpp.js', name: 'LlamaCpp CPU', global: '__llamacpp_cpu__' },
+                { url: '/assets/racommons-llamacpp-webgpu.js', name: 'LlamaCpp WebGPU', global: '__llamacpp_webgpu__' },
+                { url: '/assets/sherpa/sherpa-onnx-glue.js', name: 'Sherpa ONNX', global: '__sherpa_onnx__' },
+            ];
+
+            for (const mod of modules) {
+                try {
+                    log(`Loading ${mod.name}...`);
+                    
+                    // Fetch the module code
+                    const response = await fetch(mod.url);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                    const code = await response.text();
+                    
+                    // Create blob URL
+                    const blob = new Blob([code], { type: 'application/javascript' });
+                    const blobURL = URL.createObjectURL(blob);
+                    
+                    // Import via blob URL (bypasses bundler)
+                    const module = await import(blobURL);
+                    
+                    // Store in global scope
+                    window[mod.global] = module.default || module;
+                    
+                    log(`✓ ${mod.name} loaded successfully`);
+                } catch (error) {
+                    log(`✗ Failed to load ${mod.name}: ${error.message}`, true);
+                    throw error;
+                }
+            }
+            
+            log('\n✓ All modules loaded! Ready for SDK initialization.');
+        }
+
+        loadModules().catch(error => {
+            log(`\nFATAL ERROR: ${error.message}`, true);
+        });
+    </script>
+</body>
+</html>
