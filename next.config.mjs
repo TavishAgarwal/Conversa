@@ -1,14 +1,23 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   images: {
     unoptimized: true,
   },
   // Required headers for SharedArrayBuffer support (needed for WASM)
   async headers() {
     return [
+      {
+        source: '/assets/racommons-llamacpp-webgpu.wasm',
+        headers: [{ key: 'Content-Type', value: 'application/wasm' }],
+      },
+      {
+        source: '/assets/racommons-llamacpp.wasm',
+        headers: [{ key: 'Content-Type', value: 'application/wasm' }],
+      },
+      {
+        source: '/assets/sherpa/sherpa-onnx.wasm',
+        headers: [{ key: 'Content-Type', value: 'application/wasm' }],
+      },
       {
         source: '/:path*',
         headers: [

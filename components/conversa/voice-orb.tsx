@@ -10,6 +10,7 @@ interface VoiceOrbProps {
   modeColor: string
   onClick: () => void
   disabled?: boolean
+  audioLevel?: number
 }
 
 const stateConfig: Record<OrbState, { label: string; outerClass: string; innerClass: string }> = {
@@ -35,10 +36,12 @@ const stateConfig: Record<OrbState, { label: string; outerClass: string; innerCl
   },
 }
 
-export function VoiceOrb({ state, modeColor, onClick, disabled = false }: VoiceOrbProps) {
+export function VoiceOrb({ state, modeColor, onClick, disabled = false, audioLevel = 0 }: VoiceOrbProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animFrameRef = useRef<number>(0)
   const phaseRef = useRef(0)
+  const audioLevelRef = useRef(audioLevel)
+  audioLevelRef.current = audioLevel
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -61,10 +64,11 @@ export function VoiceOrb({ state, modeColor, onClick, disabled = false }: VoiceO
         const barCount = 48
         for (let i = 0; i < barCount; i++) {
           const angle = (i / barCount) * Math.PI * 2
+          const al = audioLevelRef.current
           const wave =
             state === "speaking"
               ? Math.sin(phaseRef.current * 3 + i * 0.5) * 18 + Math.sin(phaseRef.current * 5 + i * 0.3) * 10
-              : Math.sin(phaseRef.current * 2 + i * 0.4) * 8
+              : Math.sin(phaseRef.current * 2 + i * 0.4) * 8 + al * 25 * Math.sin(phaseRef.current * 4 + i * 0.6)
           const r1 = baseR + 12
           const r2 = baseR + 20 + Math.max(0, wave)
           const x1 = cx + Math.cos(angle) * r1

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { TopNav } from "@/components/conversa/top-nav"
-import { VoiceAssistantScreen } from "@/components/conversa/voice-assistant-screen"
+import { VoiceUI } from "@/frontend/ui/VoiceUI"
 import { DashboardScreen } from "@/components/conversa/dashboard-screen"
 import { TasksScreen } from "@/components/conversa/tasks-screen"
 import { PluginsScreen } from "@/components/conversa/plugins-screen"
@@ -38,7 +38,7 @@ export default function ConversaApp() {
 
       {/* Screen content */}
       <main className="flex-1 relative overflow-auto">
-        {activeTab === "voice" && <VoiceAssistantScreen />}
+        {activeTab === "voice" && <VoiceUI />}
         {activeTab === "dashboard" && <DashboardScreen />}
         {activeTab === "tasks" && <TasksScreen />}
         {activeTab === "plugins" && <PluginsScreen />}

@@ -1,6 +1,7 @@
 "use client"
 
 import { cn } from "@/lib/utils"
+import { DemoGuide } from "@/components/conversa/demo-guide"
 
 type NavTab = "voice" | "dashboard" | "tasks" | "plugins" | "privacy"
 
@@ -110,8 +111,9 @@ export function TopNav({ activeTab, onTabChange }: TopNavProps) {
         })}
       </nav>
 
-      {/* Version badge */}
-      <div className="flex items-center gap-2">
+      {/* Right side: Demo Guide + Version badge */}
+      <div className="flex items-center gap-2.5">
+        <DemoGuide />
         <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-950/60 border border-emerald-700/40 text-emerald-400 text-xs font-medium">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
           Offline

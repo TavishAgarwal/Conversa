@@ -137,6 +137,9 @@ export function PrivacyScreen() {
         ))}
       </div>
 
+      {/* Offline Benchmark */}
+      <OfflineBenchmark />
+
       {/* Clear data */}
       <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5 flex items-center justify-between gap-4">
         <div>
@@ -157,6 +160,84 @@ export function PrivacyScreen() {
           {cleared ? "Cleared" : "Clear Data"}
         </button>
       </div>
+    </div>
+  )
+}
+
+function OfflineBenchmark() {
+  const [status, setStatus] = useState<'idle' | 'running' | 'done'>('idle')
+  const [result, setResult] = useState<{ llmMs: number; tokPerSec: number; isOffline: boolean } | null>(null)
+
+  async function runBenchmark() {
+    setStatus('running')
+    setResult(null)
+
+    try {
+      const isOffline = !navigator.onLine
+      const { ExtensionPoint } = await import('@runanywhere/web')
+      const textGen: any = ExtensionPoint.requireProvider('llm', '@runanywhere/web-llamacpp')
+      
+      const prompt = '<|im_start|>system\nYou are a helpful assistant.\n<|im_end|>\n<|im_start|>user\nWhat is 2 + 2?\n<|im_end|>\n<|im_start|>assistant\n'
+      
+      const start = performance.now()
+      let tokenCount = 0
+      const { stream } = await textGen.generateStream(prompt, { temperature: 0.3, maxTokens: 50 })
+      
+      for await (const _token of stream) {
+        tokenCount++
+      }
+      
+      const elapsed = performance.now() - start
+      const tokPerSec = elapsed > 0 ? Math.round((tokenCount / elapsed) * 1000 * 10) / 10 : 0
+
+      setResult({ llmMs: Math.round(elapsed), tokPerSec, isOffline })
+      setStatus('done')
+    } catch (e) {
+      console.error('Benchmark failed:', e)
+      setStatus('idle')
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-blue-700/30 bg-blue-950/20 p-5">
+      <div className="flex items-center justify-between gap-4 mb-3">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Offline Benchmark</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Verify the AI pipeline works without internet. Disconnect WiFi and run!
+          </p>
+        </div>
+        <button
+          onClick={runBenchmark}
+          disabled={status === 'running'}
+          className={cn(
+            "flex-shrink-0 px-4 py-2 rounded-xl text-sm font-medium border transition-all duration-300 active:scale-95",
+            status === 'running'
+              ? "bg-blue-950/50 border-blue-700/50 text-blue-400 animate-pulse cursor-wait"
+              : "bg-blue-500/20 border-blue-500/40 text-blue-400 hover:bg-blue-500/30"
+          )}
+        >
+          {status === 'running' ? 'Running...' : status === 'done' ? 'Run Again' : 'Run Benchmark'}
+        </button>
+      </div>
+      {result && (
+        <div className="grid grid-cols-3 gap-3 mt-3">
+          <div className="rounded-lg bg-card/40 p-3 text-center">
+            <div className="text-xs text-muted-foreground">Network</div>
+            <div className={cn("text-sm font-bold mt-0.5", result.isOffline ? "text-emerald-400" : "text-amber-400")}>
+              {result.isOffline ? "✓ Offline" : "Online"}
+            </div>
+          </div>
+          <div className="rounded-lg bg-card/40 p-3 text-center">
+            <div className="text-xs text-muted-foreground">Latency</div>
+            <div className="text-sm font-bold text-blue-400 mt-0.5">{(result.llmMs / 1000).toFixed(1)}s</div>
+          </div>
+          <div className="rounded-lg bg-card/40 p-3 text-center">
+            <div className="text-xs text-muted-foreground">Speed</div>
+            <div className="text-sm font-bold text-purple-400 mt-0.5">{result.tokPerSec} tok/s</div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

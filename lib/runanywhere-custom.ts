@@ -7,7 +7,7 @@
 
 'use client';
 
-import { RunAnywhere, SDKEnvironment, ModelManager, ModelCategory, LLMFramework, type CompactModelDef } from '@runanywhere/web';
+import { RunAnywhere, SDKEnvironment, ModelManager, ModelCategory, LLMFramework, ExtensionPoint, type CompactModelDef } from '@runanywhere/web';
 
 declare global {
   interface Window {
@@ -74,21 +74,7 @@ export async function initSDKCustom(): Promise<void> {
   _initPromise = (async () => {
     console.log('[CustomSDK] Starting initialization...');
 
-    // Step 1: Wait for pre-loaded modules
-    console.log('[CustomSDK] Waiting for pre-loaded WASM modules...');
-    let attempts = 0;
-    while (!window.__WASM_MODULES_READY__ && attempts < 300) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      attempts++;
-    }
-
-    if (!window.__WASM_MODULES_READY__) {
-      throw new Error('WASM modules failed to pre-load');
-    }
-
-    console.log('[CustomSDK] WASM modules pre-loaded ✓');
-
-    // Step 2: Initialize core SDK
+    // Step 1: Initialize core SDK
     console.log('[CustomSDK] Initializing core SDK...');
     await RunAnywhere.initialize({
       environment: SDKEnvironment.Development,
@@ -102,37 +88,26 @@ export async function initSDKCustom(): Promise<void> {
     try {
       // Get the SDK's bridge instances
       // @ts-ignore
-      const { LlamaCppBridge } = await import('@runanywhere/web-llamacpp/dist/Foundation/LlamaCppBridge');
+      const { LlamaCppBridge, LlamaCPP } = await import('@runanywhere/web-llamacpp');
       // @ts-ignore
-      const { SherpaONNXBridge } = await import('@runanywhere/web-onnx/dist/Foundation/SherpaONNXBridge');
+      const { SherpaONNXBridge, ONNX } = await import('@runanywhere/web-onnx');
       
-      // Patch the bridges to use pre-loaded modules
-      const llamaBridge = (LlamaCppBridge as any).shared;
-      const onnxBridge = (SherpaONNXBridge as any).shared;
+      // Register the backend SDK controllers natively, providing explicit 
+      // override pointers to our locally cached airplane-mode WebAssembly binaries.
+      // This delegates WASM ingestion to internal WebWorkers seamlessly bypassing
+      // the rigid 8MB V8 synchronous Main-Thread Chrome limits.
       
-      // Inject pre-loaded modules
-      if (llamaBridge) {
-        console.log('[CustomSDK] Injecting LlamaCpp module...');
-        llamaBridge._module = await window.__llamacpp_cpu__?.({
-          print: (text: string) => console.log('[LlamaCpp]', text),
-          printErr: (text: string) => console.error('[LlamaCpp]', text),
-          locateFile: (path: string) => `/assets/${path}`,
-        });
-        llamaBridge._loaded = true;
-        llamaBridge._accelerationMode = 'cpu';
-        console.log('[CustomSDK] LlamaCpp module injected ✓');
-      }
+      await LlamaCPP.register({
+         wasmUrl: '/assets/racommons-llamacpp.js',
+         acceleration: 'cpu'
+      });
+      console.log('[CustomSDK] LlamaCpp native worker routing registered ✓');
       
-      if (onnxBridge) {
-        console.log('[CustomSDK] Injecting Sherpa ONNX module...');
-        onnxBridge._module = await window.__sherpa_onnx__?.({
-          print: (text: string) => console.log('[SherpaONNX]', text),
-          printErr: (text: string) => console.error('[SherpaONNX]', text),
-          locateFile: (path: string) => `/assets/sherpa/${path}`,
-        });
-        onnxBridge._loaded = true;
-        console.log('[CustomSDK] Sherpa ONNX module injected ✓');
-      }
+      await ONNX.register({
+         wasmUrl: '/assets/sherpa/sherpa-onnx-glue.js',
+         helperBaseUrl: '/assets/sherpa/'
+      });
+      console.log('[CustomSDK] SherpaONNX native worker routing registered ✓');
       
     } catch (error) {
       console.error('[CustomSDK] Failed to inject WASM modules:', error);

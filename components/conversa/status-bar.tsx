@@ -6,10 +6,12 @@ interface StatusBarProps {
   micActive: boolean
   isThinking: boolean
   isOffline: boolean
+  showMetrics?: boolean
+  onToggleMetrics?: () => void
   className?: string
 }
 
-export function StatusBar({ micActive, isThinking, isOffline, className }: StatusBarProps) {
+export function StatusBar({ micActive, isThinking, isOffline, showMetrics, onToggleMetrics, className }: StatusBarProps) {
   return (
     <div className={cn("flex items-center gap-3 flex-wrap justify-center", className)}>
       {/* Offline badge */}
@@ -49,6 +51,25 @@ export function StatusBar({ micActive, isThinking, isOffline, className }: Statu
           <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-ping" />
           AI Thinking
         </div>
+      )}
+
+      {/* Metrics toggle */}
+      {onToggleMetrics && (
+        <button
+          onClick={onToggleMetrics}
+          className={cn(
+            "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all duration-300",
+            "focus:outline-none active:scale-95",
+            showMetrics
+              ? "bg-amber-950/60 border-amber-600/50 text-amber-400"
+              : "bg-muted/40 border-border/40 text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+          </svg>
+          {showMetrics ? "Metrics On" : "Metrics"}
+        </button>
       )}
     </div>
   )
