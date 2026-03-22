@@ -58,42 +58,89 @@ export async function initializeAI(): Promise<void> {
 
 /** Load required models for voice assistant */
 export async function loadVoiceModels(
-  onProgress?: (modelId: string, progress: number) => void
+  onProgress?: (modelId: string, progress: number, isDownloading: boolean) => void
 ): Promise<void> {
-  const models = [
+  const modelsToLoad = [
     'lfm2-350m-q4_k_m',              // LLM
     'sherpa-onnx-whisper-tiny.en',   // STT
     'vits-piper-en_US-lessac-medium', // TTS
     'silero-vad-v5',                 // VAD
   ];
 
+  // OPFS Debug utility
+  if (process.env.NODE_ENV === 'development') {
+    try {
+      const root = await navigator.storage.getDirectory();
+      console.log('[Conversa] OPFS root directory handle:', root);
+      
+      // Specifically look in the models directory where RunAnywhere stores them
+      try {
+        const modelsDir = await root.getDirectoryHandle('models');
+        console.log('[Conversa] Found OPFS "models" directory');
+        for await (const [name] of (modelsDir as any).entries()) {
+          console.log('[Conversa] OPFS Cached model file/dir:', name);
+        }
+      } catch (e) {
+        console.log('[Conversa] No "models" directory found in OPFS yet.');
+      }
+    } catch (e) {
+      console.error('[Conversa] Error checking OPFS:', e);
+    }
+  }
+
+  // First, check which models are already cached vs need downloading
+  const allModels = ModelManager.getModels();
+  const missingModels: string[] = [];
+  
+  for (const modelId of modelsToLoad) {
+    const model = allModels.find(m => m.id === modelId);
+    // If it's already loaded or downloaded, we don't need to download it again
+    if (!model || (model.status !== 'downloaded' && model.status !== 'loaded')) {
+      missingModels.push(modelId);
+    }
+  }
+
+  const needsDownload = missingModels.length > 0;
+  console.log(`[Conversa] Models needing download: ${needsDownload ? missingModels.join(', ') : 'None (all cached)'}`);
+
   // Track progress globally
   let unsubscribe: (() => void) | undefined;
-  if (onProgress) {
-    unsubscribe = ModelManager.onChange((allModels) => {
-      for (const m of allModels) {
-        if (models.includes(m.id) && m.downloadProgress !== undefined) {
-          // SDK provides progress as 0-1, UI expects 0-100
-          onProgress(m.id, m.downloadProgress * 100);
+  if (onProgress && needsDownload) {
+    unsubscribe = ModelManager.onChange((updatedModels) => {
+      for (const m of updatedModels) {
+        if (modelsToLoad.includes(m.id) && m.downloadProgress !== undefined) {
+          // Only show download progress if it was initially missing
+          if (missingModels.includes(m.id)) {
+            onProgress(m.id, m.downloadProgress * 100, true);
+          }
         }
       }
     });
   }
 
   try {
-    for (const modelId of models) {
+    for (const modelId of modelsToLoad) {
+      // If it needed downloading, we report 0% progress to show the UI
+      if (missingModels.includes(modelId) && onProgress) {
+        onProgress(modelId, 0, true);
+      } else if (onProgress) {
+        // If it was already cached, we can just say 100% and not downloading
+        onProgress(modelId, 100, false);
+      }
+
+      // ModelManager.downloadModel is technically idempotent, but now we know if we expect a download delay
       await ModelManager.downloadModel(modelId);
       
-      // Use coexist: true so loading the TTS/VAD doesn't unload the STT/LLM
+      // Load the model silently (or with minimal UI if it was cached)
       const success = await ModelManager.loadModel(modelId, { coexist: true });
       
       if (!success) {
-        const model = ModelManager.getModels().find(m => m.id === modelId);
-        throw new Error(model?.error || `Failed to load model: ${modelId}`);
+        const checkModel = ModelManager.getModels().find(m => m.id === modelId);
+        throw new Error(checkModel?.error || `Failed to load model: ${modelId}`);
       }
       
-      // Ensure UI shows 100% when loaded
-      onProgress?.(modelId, 100);
+      // Ensure UI shows 100% when fully loaded
+      onProgress?.(modelId, 100, false);
     }
   } finally {
     if (unsubscribe) {

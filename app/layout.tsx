@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import Script from 'next/script'
 import './globals.css'
+import { ModelProvider } from '@/components/context/ModelContext'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 
@@ -74,7 +75,9 @@ export default function RootLayout({
         />
       </head>
       <body className={`${inter.variable} font-sans antialiased bg-background text-foreground`}>
-        {children}
+        <ModelProvider>
+          {children}
+        </ModelProvider>
         <Analytics />
       </body>
     </html>

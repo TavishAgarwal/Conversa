@@ -9,13 +9,11 @@ import { FloatingControls } from "./floating-controls"
 import { ModelLoader } from "./model-loader"
 import { useConversationMemory } from "@/hooks/use-conversation-memory"
 import {
-  initializeAI,
-  loadVoiceModels,
-  areVoiceModelsLoaded,
   VoiceActivityDetector,
   processVoiceTurn,
 } from "@/lib/ai-service"
 import { SYSTEM_PROMPT, buildContextualPrompt } from "@/lib/ai-config"
+import { useModelContext } from "@/components/context/ModelContext"
 
 type OrbState = "idle" | "listening" | "thinking" | "speaking"
 
@@ -40,15 +38,17 @@ export function VoiceAssistantScreen() {
   const [userText, setUserText] = useState("")
   const [aiText, setAiText] = useState("")
   const [isStreaming, setIsStreaming] = useState(false)
-  const [isInitialized, setIsInitialized] = useState(false)
-  const [isLoadingModels, setIsLoadingModels] = useState(false)
-  const [modelStatuses, setModelStatuses] = useState<ModelStatus[]>([
-    { id: 'lfm2-350m-q4_k_m', name: 'LFM2 350M (LLM)', progress: 0, status: 'pending' },
-    { id: 'sherpa-onnx-whisper-tiny.en', name: 'Whisper Tiny (STT)', progress: 0, status: 'pending' },
-    { id: 'vits-piper-en_US-lessac-medium', name: 'Piper TTS', progress: 0, status: 'pending' },
-    { id: 'silero-vad-v5', name: 'Silero VAD', progress: 0, status: 'pending' },
-  ])
-  const [error, setError] = useState<string>("")
+  
+  const { 
+    modelStatuses, 
+    error: contextError, 
+    isInitialized, 
+    modelStatus 
+  } = useModelContext()
+  
+  const [localError, setLocalError] = useState<string>("")
+  const error = localError || contextError;
+  const isLoadingModels = modelStatus === 'downloading' || modelStatus === 'loading' || modelStatus === 'checking';
 
   const vadRef = useRef<VoiceActivityDetector | null>(null)
   const { addUserMessage, addAssistantMessage, getRecentContext } = useConversationMemory()
@@ -56,53 +56,7 @@ export function VoiceAssistantScreen() {
   const currentMode = MODES.find((m) => m.id === mode)!
   const modeColor = currentMode.color
 
-  // Initialize SDK and load models on mount
-  useEffect(() => {
-    async function init() {
-      try {
-        setIsLoadingModels(true)
-        setError("") // Clear any previous error
-        
-        console.log('[VoiceAssistant] Starting initialization...')
-        
-        // Step 1: Initialize SDK
-        console.log('[VoiceAssistant] Step 1: Initializing AI SDK...')
-        await initializeAI()
-        console.log('[VoiceAssistant] SDK initialized successfully')
-        
-        // Step 2: Load models
-        console.log('[VoiceAssistant] Step 2: Loading voice models...')
-        await loadVoiceModels((modelId, progress) => {
-          console.log(`[VoiceAssistant] Model ${modelId}: ${progress}%`)
-          setModelStatuses(prev => 
-            prev.map(m => 
-              m.id === modelId 
-                ? { ...m, progress, status: progress >= 100 ? 'loaded' : 'loading' }
-                : m
-            )
-          )
-        })
-
-        // Mark all as loaded
-        console.log('[VoiceAssistant] All models loaded successfully')
-        setModelStatuses(prev => prev.map(m => ({ ...m, status: 'loaded', progress: 100 })))
-        setIsInitialized(true)
-        setIsLoadingModels(false)
-      } catch (err) {
-        console.error('[VoiceAssistant] Initialization failed:', err)
-        console.error('[VoiceAssistant] Error stack:', err instanceof Error ? err.stack : 'No stack trace')
-        
-        const errorMessage = err instanceof Error ? err.message : 'Failed to load models'
-        console.error('[VoiceAssistant] Error message:', errorMessage)
-        
-        setError(errorMessage)
-        setModelStatuses(prev => prev.map(m => ({ ...m, status: 'error' })))
-        setIsLoadingModels(false)
-      }
-    }
-
-    init()
-  }, [])
+  // SDK initialization and model loading is now handled globally by ModelContext
 
   async function handleOrbClick() {
     if (!isInitialized || isLoadingModels) return
@@ -118,7 +72,7 @@ export function VoiceAssistantScreen() {
     setOrbState("listening")
     setUserText("")
     setAiText("")
-    setError("")
+    setLocalError("")
 
     try {
       if (!vadRef.current) {
@@ -167,25 +121,25 @@ export function VoiceAssistantScreen() {
               },
               onError: (err) => {
                 console.error('Voice processing error:', err)
-                setError(err.message)
+                setLocalError(err.message)
                 setOrbState("idle")
               },
             })
           } catch (err) {
             console.error('Failed to process voice turn:', err)
-            setError(err instanceof Error ? err.message : 'Failed to process speech')
+            setLocalError(err instanceof Error ? err.message : 'Failed to process speech')
             setOrbState("idle")
           }
         },
         onError: (err) => {
           console.error('VAD error:', err)
-          setError(err.message)
+          setLocalError(err.message)
           setOrbState("idle")
         },
       })
     } catch (err) {
       console.error('Failed to start listening:', err)
-      setError(err instanceof Error ? err.message : 'Failed to access microphone')
+      setLocalError(err instanceof Error ? err.message : 'Failed to access microphone')
       setOrbState("idle")
     }
   }
@@ -207,17 +161,17 @@ export function VoiceAssistantScreen() {
     setUserText("")
     setAiText("")
     setIsStreaming(false)
-    setError("")
+    setLocalError("")
   }
 
   return (
     <div className="flex flex-col items-center gap-8 py-6 px-4 min-h-full">
       {/* Model loading overlay */}
-      {(isLoadingModels || !isInitialized) && (
+      {(isLoadingModels && !isInitialized) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
           <ModelLoader 
             isLoading={isLoadingModels}
-            models={modelStatuses}
+            models={modelStatuses as any}
             error={error}
           />
         </div>
