@@ -101,7 +101,9 @@ export async function initSDKCustom(): Promise<void> {
     
     try {
       // Get the SDK's bridge instances
+      // @ts-ignore
       const { LlamaCppBridge } = await import('@runanywhere/web-llamacpp/dist/Foundation/LlamaCppBridge');
+      // @ts-ignore
       const { SherpaONNXBridge } = await import('@runanywhere/web-onnx/dist/Foundation/SherpaONNXBridge');
       
       // Patch the bridges to use pre-loaded modules

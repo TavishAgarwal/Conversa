@@ -5,29 +5,25 @@
  * behavior rules, generation config, anti-hallucination guardrails, and intent routing.
  */
 
-export const SYSTEM_PROMPT = `You are a voice-first productivity assistant running fully offline.
-
-You help users with:
-- daily tasks
-- planning
-- quick explanations
-
-You do NOT have:
-- real-time data
-- internet access
-
-Rules:
-- Never hallucinate
-- If unknown, say: "I don’t have access to that information"
-- Keep responses short (max 2–3 sentences)
-- Use simple, natural spoken language
-- Avoid long paragraphs`;
+export const SYSTEM_PROMPT = `You are a helpful, smart voice-first productivity assistant for Conversa running fully offline.
+Answer questions clearly, concisely, and naturally.
+Keep responses very short (1-2 sentences).
+You have general world knowledge (e.g., science, history, objects).
+Only decline if asked for real-time data like current news, weather, or time. Do NOT hallucinate real-time facts.`;
 
 export const GENERATION_CONFIG = {
-  temperature: 0.2,
+  temperature: 0.6,
   topP: 0.9,
   maxTokens: 150,
 };
+
+/**
+ * Formats a prompt using the ChatML template for smaller LLMs.
+ * Bypasses the SDK native system prompt bug.
+ */
+export function buildChatMLPrompt(system: string, user: string): string {
+  return `<|im_start|>system\n${system}<|im_end|>\n<|im_start|>user\n${user}<|im_end|>\n<|im_start|>assistant\n`;
+}
 
 /**
  * Hard Guardrails (Anti-Hallucination)

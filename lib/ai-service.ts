@@ -15,7 +15,7 @@ import {
   ExtensionPoint
 } from '@runanywhere/web';
 import { VAD } from '@runanywhere/web-onnx';
-import { GENERATION_CONFIG, guardrails, detectIntent } from './ai-config';
+import { GENERATION_CONFIG, guardrails, detectIntent, buildChatMLPrompt } from './ai-config';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -243,12 +243,35 @@ export class VoiceActivityDetector {
 // High-Level Voice Pipeline
 // ---------------------------------------------------------------------------
 
+let activeTurnIsCancelled = false;
+let activeLlmCancel: (() => void) | null = null;
+let activeAudioPlayer: AudioPlayback | null = null;
+
+export function interruptVoiceTurn(): void {
+  activeTurnIsCancelled = true;
+  
+  if (activeLlmCancel) {
+    activeLlmCancel();
+    activeLlmCancel = null;
+  }
+  
+  if (activeAudioPlayer) {
+    activeAudioPlayer.stop();
+    activeAudioPlayer.dispose();
+    activeAudioPlayer = null;
+  }
+}
+
 export async function processVoiceTurn(
   audioData: Float32Array,
   systemPrompt: string,
   callbacks?: VoiceProcessingCallbacks
 ): Promise<{ transcript: string; response: string }> {
   try {
+    activeTurnIsCancelled = false;
+    activeLlmCancel = null;
+    activeAudioPlayer = null;
+
     const stt: any = ExtensionPoint.requireProvider('stt', '@runanywhere/web-onnx');
     const textGen: any = ExtensionPoint.requireProvider('llm', '@runanywhere/web-llamacpp');
     const tts: any = ExtensionPoint.requireProvider('tts', '@runanywhere/web-onnx');
@@ -256,6 +279,8 @@ export async function processVoiceTurn(
     callbacks?.onStateChange?.('processingSTT' as any);
     const sttResult = await stt.transcribe(audioData, { sampleRate: 16000 });
     const transcript = sttResult.text.trim();
+    if (activeTurnIsCancelled) return { transcript: '', response: '' };
+    
     callbacks?.onTranscription?.(transcript);
     
     if (!transcript) return { transcript: '', response: '' };
@@ -263,18 +288,26 @@ export async function processVoiceTurn(
     // Anti-Hallucination Guardrails
     const blocked = guardrails(transcript);
     if (blocked) {
+      if (activeTurnIsCancelled) return { transcript, response: blocked };
+      
       callbacks?.onStateChange?.('generatingResponse' as any);
       callbacks?.onGenerationComplete?.(blocked);
       callbacks?.onStateChange?.('playingTTS' as any);
       callbacks?.onSynthesisStart?.();
       
       const ttsResult = await tts.synthesize(blocked, { speed: 1.0 });
+      if (activeTurnIsCancelled) return { transcript, response: blocked };
+      
       const player = new AudioPlayback({ sampleRate: ttsResult.sampleRate });
+      activeAudioPlayer = player;
       await player.play(ttsResult.audioData, ttsResult.sampleRate);
       player.dispose();
       
-      callbacks?.onSynthesisComplete?.();
-      callbacks?.onStateChange?.('idle' as any);
+      if (activeAudioPlayer === player) activeAudioPlayer = null;
+      if (!activeTurnIsCancelled) {
+        callbacks?.onSynthesisComplete?.();
+        callbacks?.onStateChange?.('idle' as any);
+      }
       return { transcript, response: blocked };
     }
 
@@ -287,21 +320,26 @@ export async function processVoiceTurn(
       finalPrompt += "\n\n[Context: User wants to set or discuss reminders.]";
     }
     
+    
+    // Explicitly format using ChatML to bypass SDK systemPrompt memory crash bug
+    const fullPrompt = buildChatMLPrompt(finalPrompt, transcript);
+
     callbacks?.onStateChange?.('generatingResponse' as any);
     callbacks?.onGenerationStart?.();
     
-    const { stream, cancel } = await textGen.generateStream(transcript, {
+    // DO NOT PASS topP or systemPrompt. Pass fullPrompt as main argument.
+    const { stream, cancel } = await textGen.generateStream(fullPrompt, {
       maxTokens: GENERATION_CONFIG.maxTokens,
       temperature: GENERATION_CONFIG.temperature,
-      topP: GENERATION_CONFIG.topP,
-      systemPrompt: finalPrompt,
     });
+    activeLlmCancel = cancel;
     
     let accumulated = '';
     let unsynthesized = '';
     let audioQueue = Promise.resolve();
     
     for await (const token of stream) {
+      if (activeTurnIsCancelled) break;
       accumulated += token;
       unsynthesized += token;
       callbacks?.onGenerationToken?.(token);
@@ -321,37 +359,52 @@ export async function processVoiceTurn(
         unsynthesized = '';
         
         if (chunkToPlay.length > 0) {
-          callbacks?.onStateChange?.('playingTTS' as any);
-          callbacks?.onSynthesisStart?.();
           audioQueue = audioQueue.then(async () => {
+            if (activeTurnIsCancelled) return;
+            callbacks?.onStateChange?.('playingTTS' as any);
+            callbacks?.onSynthesisStart?.();
             const ttsResult = await tts.synthesize(chunkToPlay, { speed: 1.0 });
+            if (activeTurnIsCancelled) return;
+            
             const player = new AudioPlayback({ sampleRate: ttsResult.sampleRate });
+            activeAudioPlayer = player;
             await player.play(ttsResult.audioData, ttsResult.sampleRate);
             player.dispose();
-            callbacks?.onSynthesisComplete?.();
+            
+            if (activeAudioPlayer === player) activeAudioPlayer = null;
+            if (!activeTurnIsCancelled) callbacks?.onSynthesisComplete?.();
           });
         }
       }
     }
 
     // Final trailing text
-    if (unsynthesized.trim().length > 0) {
+    if (unsynthesized.trim().length > 0 && !activeTurnIsCancelled) {
       const chunkToPlay = unsynthesized.trim();
-      callbacks?.onStateChange?.('playingTTS' as any);
-      callbacks?.onSynthesisStart?.();
       audioQueue = audioQueue.then(async () => {
+        if (activeTurnIsCancelled) return;
+        callbacks?.onStateChange?.('playingTTS' as any);
+        callbacks?.onSynthesisStart?.();
         const ttsResult = await tts.synthesize(chunkToPlay, { speed: 1.0 });
+        if (activeTurnIsCancelled) return;
+        
         const player = new AudioPlayback({ sampleRate: ttsResult.sampleRate });
+        activeAudioPlayer = player;
         await player.play(ttsResult.audioData, ttsResult.sampleRate);
         player.dispose();
-        callbacks?.onSynthesisComplete?.();
+        
+        if (activeAudioPlayer === player) activeAudioPlayer = null;
+        if (!activeTurnIsCancelled) callbacks?.onSynthesisComplete?.();
       });
     }
 
     // Await all queued audio playback before completing turn
     await audioQueue;
-    callbacks?.onGenerationComplete?.(accumulated);
-    callbacks?.onStateChange?.('idle' as any);
+    
+    if (!activeTurnIsCancelled) {
+      callbacks?.onGenerationComplete?.(accumulated);
+      callbacks?.onStateChange?.('idle' as any);
+    }
 
     return { transcript, response: accumulated };
   } catch (error) {

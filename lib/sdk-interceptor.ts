@@ -48,6 +48,7 @@ export function patchSDKModuleLoading() {
   console.log('[SDKInterceptor] Patching SDK module loading...');
   
   // Store original dynamic import
+  // @ts-ignore - TS doesn't know about window.import
   const originalImport = window.import || ((...args: any[]) => (window as any).import(...args));
   
   // Create custom import function

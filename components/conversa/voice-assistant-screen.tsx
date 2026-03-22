@@ -11,6 +11,7 @@ import { useConversationMemory } from "@/hooks/use-conversation-memory"
 import {
   VoiceActivityDetector,
   processVoiceTurn,
+  interruptVoiceTurn,
 } from "@/lib/ai-service"
 import { SYSTEM_PROMPT, buildContextualPrompt } from "@/lib/ai-config"
 import { useModelContext } from "@/components/context/ModelContext"
@@ -153,15 +154,19 @@ export function VoiceAssistantScreen() {
 
   function handleInterrupt() {
     stopListening()
+    interruptVoiceTurn()
     setIsStreaming(false)
+    setOrbState("idle")
   }
 
   function handleReset() {
     stopListening()
+    interruptVoiceTurn()
     setUserText("")
     setAiText("")
     setIsStreaming(false)
     setLocalError("")
+    setOrbState("idle")
   }
 
   return (
