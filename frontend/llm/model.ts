@@ -111,6 +111,13 @@ export function isSmartModelReady(): boolean {
 }
 
 /**
+ * Returns the error message if the Smart model failed to load, or null.
+ */
+export function getSmartModelError(): string | null {
+  return _smartModelError;
+}
+
+/**
  * Select the appropriate LLM model ID based on the mode.
  * Falls back to Fast model if Smart is not yet loaded.
  */

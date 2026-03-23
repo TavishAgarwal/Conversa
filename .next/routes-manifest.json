@@ -16,6 +16,36 @@
   ],
   "headers": [
     {
+      "source": "/assets/racommons-llamacpp-webgpu.wasm",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/wasm"
+        }
+      ],
+      "regex": "^/assets/racommons-llamacpp-webgpu\\.wasm(?:/)?$"
+    },
+    {
+      "source": "/assets/racommons-llamacpp.wasm",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/wasm"
+        }
+      ],
+      "regex": "^/assets/racommons-llamacpp\\.wasm(?:/)?$"
+    },
+    {
+      "source": "/assets/sherpa/sherpa-onnx.wasm",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/wasm"
+        }
+      ],
+      "regex": "^/assets/sherpa/sherpa-onnx\\.wasm(?:/)?$"
+    },
+    {
       "source": "/:path*",
       "headers": [
         {

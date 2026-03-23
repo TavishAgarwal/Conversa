@@ -121,6 +121,39 @@ export function PrivacyScreen() {
         </div>
       </div>
 
+      {/* AI Stack (Local Execution) */}
+      <div className="rounded-2xl border border-violet-700/40 bg-violet-950/20 overflow-hidden">
+        <div className="px-5 py-4 border-b border-violet-700/20">
+          <div className="flex items-center gap-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-violet-400">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+            <h3 className="text-sm font-semibold text-foreground">AI Stack (Local Execution)</h3>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">Every component runs entirely on your device via RunAnywhere SDK</p>
+        </div>
+        <div className="divide-y divide-violet-700/15">
+          {[
+            { label: "STT", value: "Whisper", runtime: "RunAnywhere ONNX", icon: "🎤", color: "text-blue-400" },
+            { label: "LLM", value: "LFM2 (350M / 1.2B)", runtime: "RunAnywhere WebLLamaCpp", icon: "🧠", color: "text-violet-400" },
+            { label: "TTS", value: "Piper", runtime: "RunAnywhere ONNX", icon: "🔊", color: "text-emerald-400" },
+            { label: "Voice Pipeline", value: "Local (STT → LLM → TTS)", runtime: "Browser WebAssembly", icon: "🔗", color: "text-amber-400" },
+            { label: "Tool Calling", value: "Local JSON execution", runtime: "In-browser parsing", icon: "⚙️", color: "text-cyan-400" },
+          ].map((item) => (
+            <div key={item.label} className="flex items-center gap-4 px-5 py-3">
+              <span className="text-lg w-8 text-center">{item.icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs font-bold uppercase tracking-wider ${item.color}`}>{item.label}</span>
+                </div>
+                <div className="text-sm text-foreground font-medium">{item.value}</div>
+              </div>
+              <div className="text-[10px] text-muted-foreground/70 text-right max-w-[140px]">{item.runtime}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Privacy highlights */}
       <div className="grid grid-cols-2 gap-3">
         {[

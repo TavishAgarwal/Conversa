@@ -118,7 +118,12 @@ export function TopNav({ activeTab, onTabChange }: TopNavProps) {
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
           Offline
         </div>
-        <div className="text-xs text-muted-foreground/50 hidden lg:block">v1.0.0</div>
+        <div className="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-blue-950/60 to-violet-950/60 border border-blue-700/30 text-blue-300 text-[10px] font-semibold tracking-wide">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-400">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+          </svg>
+          Powered by RunAnywhere SDK
+        </div>
       </div>
     </header>
   )

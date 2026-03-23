@@ -203,4 +203,134 @@ export class VoicePipeline {
       callbacks.onStateChange('idle');
     }
   }
+
+  /**
+   * Like processTurn but skips STT — feeds text directly into LLM → TTS.
+   * Used by the Quick Demo feature to drive the real pipeline programmatically.
+   */
+  public async processTextTurn(
+    text: string,
+    callbacks: PipelineCallbacks,
+    persona: string = 'productivity',
+    modelMode: ModelMode = 'fast'
+  ) {
+    this.isCancelled = false;
+    this.activeCancel = null;
+    this._stopCurrentAudio();
+
+    const turnStart = performance.now();
+    let llmMs = 0;
+    let llmTokenCount = 0;
+    let ttsMs = 0;
+
+    try {
+      // Skip STT — user text is already provided
+      callbacks.onTranscript(text);
+      await memory.addMessage({ role: 'user', content: text });
+
+      // LLM + TTS — identical to processTurn
+      callbacks.onStateChange('llm');
+      const llmStart = performance.now();
+      const textGen: any = ExtensionPoint.requireProvider('llm', '@runanywhere/web-llamacpp');
+
+      const history = await memory.getRecentContext(6);
+      const systemPrompt = getPersonaPrompt(persona);
+      const fullPrompt = buildChatMLPrompt(systemPrompt, text, history.slice(0, -1));
+
+      const genConfig = getGenerationConfig(modelMode);
+      const activeModelId = selectModelId(modelMode);
+      const { stream, cancel } = await textGen.generateStream(fullPrompt, { ...genConfig, modelId: activeModelId });
+      this.activeCancel = cancel;
+
+      let fullResponse = '';
+      let buffer = '';
+      const ttsQueue: string[] = [];
+      let llmDone = false;
+      let firstTtsStarted = false;
+      let ttsStartTime = 0;
+
+      const playQueuePromise = (async () => {
+        while (true) {
+          if (ttsQueue.length > 0) {
+            const sentence = ttsQueue.shift()!;
+            if (this.isCancelled) break;
+            if (!firstTtsStarted) {
+              firstTtsStarted = true;
+              ttsStartTime = performance.now();
+              callbacks.onStateChange('tts');
+            }
+            this._stopCurrentAudio();
+            const player = await synthesizeAudio(sentence);
+            this.activePlayer = player;
+            await player.waitForEnd();
+          } else if (llmDone) {
+            break;
+          } else {
+            await new Promise(r => setTimeout(r, 50));
+          }
+        }
+      })();
+
+      for await (const token of stream) {
+        if (this.isCancelled) break;
+        fullResponse += token;
+        buffer += token;
+        llmTokenCount++;
+        callbacks.onLLMToken(token);
+
+        if (SENTENCE_END_RE.test(buffer)) {
+          const sentence = buffer.trim();
+          buffer = '';
+          if (sentence.length > 0) {
+            const { text: cleanSentence } = parseToolCalls(sentence);
+            if (cleanSentence.length > 0) {
+              ttsQueue.push(cleanSentence);
+            }
+          }
+        }
+      }
+
+      llmMs = performance.now() - llmStart;
+
+      if (buffer.trim().length > 0 && !this.isCancelled) {
+        const { text: cleanTail } = parseToolCalls(buffer.trim());
+        if (cleanTail.length > 0) {
+          ttsQueue.push(cleanTail);
+        }
+      }
+
+      llmDone = true;
+      await playQueuePromise;
+
+      ttsMs = firstTtsStarted ? performance.now() - ttsStartTime : 0;
+
+      if (!this.isCancelled) {
+        callbacks.onLLMComplete(fullResponse);
+        await memory.addMessage({ role: 'assistant', content: fullResponse });
+
+        const { tools } = parseToolCalls(fullResponse);
+        for (const tool of tools) {
+          callbacks.onToolCall(tool);
+        }
+
+        const totalMs = performance.now() - turnStart;
+        callbacks.onTimings({
+          sttMs: 0,
+          llmMs: Math.round(llmMs),
+          llmTokens: llmTokenCount,
+          llmTokensPerSec: llmMs > 0 ? Math.round((llmTokenCount / llmMs) * 1000 * 10) / 10 : 0,
+          ttsMs: Math.round(ttsMs),
+          totalMs: Math.round(totalMs),
+        });
+
+        callbacks.onStateChange('idle');
+        callbacks.onSpeakingDone();
+      }
+
+    } catch (e) {
+      console.error('Pipeline Error (text turn):', e);
+      callbacks.onError(e as Error);
+      callbacks.onStateChange('idle');
+    }
+  }
 }

@@ -10,7 +10,26 @@ interface LatencyMetricsProps {
 }
 
 export function LatencyMetrics({ timings, visible, className }: LatencyMetricsProps) {
-  if (!visible || !timings) return null
+  if (!visible) return null
+
+  if (!timings) {
+    return (
+      <div className={cn("flex flex-col gap-1.5 items-center", className)}>
+        <div
+          className={cn(
+            "flex items-center gap-2 px-3 py-1.5 rounded-xl",
+            "bg-card/40 backdrop-blur-md border border-border/30",
+          )}
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground/40">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+          <span className="text-[10px] font-mono text-muted-foreground/40">Latency metrics will appear after first response</span>
+        </div>
+      </div>
+    )
+  }
 
   // Dynamic cloud API latency estimate based on actual response size
   // STT: ~800ms Whisper API + 400ms network RTT

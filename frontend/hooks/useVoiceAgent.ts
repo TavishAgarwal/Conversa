@@ -3,7 +3,7 @@ import { VoiceActivityDetector } from '../voice/vad';
 import { VoicePipeline, PipelineState, PipelineTimings } from '../voice/pipeline';
 import { ToolCall } from '../llm/prompt';
 import { memory } from '../storage/memory';
-import { isSmartModelReady, type ModelMode } from '../llm/model';
+import { isSmartModelReady, getSmartModelError, type ModelMode } from '../llm/model';
 
 export function useVoiceAgent() {
   const [targetState, setTargetState] = useState<PipelineState>('idle');
@@ -97,6 +97,28 @@ export function useVoiceAgent() {
     setAudioLevel(0);
   }, []);
   
+  const processTextInput = useCallback(async (text: string) => {
+    // Used by Quick Demo — feeds text directly into LLM → TTS pipeline
+    setAiText('');
+    setUserText(text);
+    setTargetState('llm');
+
+    await pipelineRef.current.processTextTurn(text, {
+      onStateChange: setTargetState,
+      onTranscript: (t) => setUserText(t),
+      onLLMToken: (t) => setAiText(prev => prev + t),
+      onLLMComplete: () => {},
+      onToolCall: (tool: ToolCall) => {
+        if (tool.name === 'create_task') {
+          setTasks(prev => [...prev, { title: tool.arguments.title || 'New Task', done: false }]);
+        }
+      },
+      onTimings: (t) => setTimings(t),
+      onSpeakingDone: () => {},
+      onError: (err) => console.error(err)
+    }, personaRef.current, modelModeRef.current);
+  }, []);
+
   const clearMemory = useCallback(async () => {
     await memory.clear();
     setAiText('');
@@ -123,8 +145,10 @@ export function useVoiceAgent() {
     modelMode,
     setModelMode,
     isSmartReady: isSmartModelReady(),
+    smartModelError: getSmartModelError(),
     startListening,
     stopListening,
-    clearMemory
+    clearMemory,
+    processTextInput
   };
 }

@@ -55,7 +55,15 @@ export function SubtitlesPanel({ userText, aiText, isStreaming, className }: Sub
           </>
         ) : (
           <p className="text-muted-foreground/50 text-sm text-center py-2 italic">
-            {userText ? "Processing..." : "Start speaking to begin a conversation"}
+            {userText ? (
+              <span className="inline-flex items-center gap-1.5 text-primary/70 animate-pulse">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 6v6l4 2" />
+                </svg>
+                Thinking…
+              </span>
+            ) : "Start speaking to begin a conversation"}
           </p>
         )}
       </div>
