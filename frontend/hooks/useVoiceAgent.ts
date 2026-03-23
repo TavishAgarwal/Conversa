@@ -3,6 +3,7 @@ import { VoiceActivityDetector } from '../voice/vad';
 import { VoicePipeline, PipelineState, PipelineTimings } from '../voice/pipeline';
 import { ToolCall } from '../llm/prompt';
 import { memory } from '../storage/memory';
+import { isSmartModelReady, type ModelMode } from '../llm/model';
 
 export function useVoiceAgent() {
   const [targetState, setTargetState] = useState<PipelineState>('idle');
@@ -12,20 +13,25 @@ export function useVoiceAgent() {
   const [timings, setTimings] = useState<PipelineTimings | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
   const [persona, setPersona] = useState('productivity');
+  const [modelMode, setModelMode] = useState<ModelMode>('fast');
   
   const vadRef = useRef<VoiceActivityDetector>(new VoiceActivityDetector());
   const pipelineRef = useRef<VoicePipeline>(new VoicePipeline());
   const continuousRef = useRef(false);
   const personaRef = useRef(persona);
+  const modelModeRef = useRef(modelMode);
 
-  // Keep personaRef in sync
+  // Keep refs in sync
   useEffect(() => {
     personaRef.current = persona;
   }, [persona]);
+  useEffect(() => {
+    modelModeRef.current = modelMode;
+  }, [modelMode]);
 
   const startVADListening = useCallback(async () => {
-    setUserText('');
-    setAiText('');
+    // NOTE: Don't clear userText/aiText here — keep previous turn visible
+    // until the next turn's transcript arrives via onTranscript
 
     await vadRef.current.start({
       onSpeechStart: () => {
@@ -37,7 +43,11 @@ export function useVoiceAgent() {
         
         await pipelineRef.current.processTurn(audioData, {
           onStateChange: setTargetState,
-          onTranscript: setUserText,
+          onTranscript: (text) => {
+            // Clear previous turn's text when new transcript arrives
+            setAiText('');
+            setUserText(text);
+          },
           onLLMToken: (t) => setAiText(prev => prev + t),
           onLLMComplete: () => {
              // Turn text complete
@@ -52,9 +62,7 @@ export function useVoiceAgent() {
             // Continuous voice loop: auto-restart listening after TTS finishes
             if (continuousRef.current) {
               setTargetState('listening');
-              setUserText('');
-              setAiText('');
-              // Re-start VAD for next turn
+              // Re-start VAD for next turn — keep current text visible
               startVADListening();
             }
           },
@@ -66,7 +74,7 @@ export function useVoiceAgent() {
               startVADListening();
             }
           }
-        }, personaRef.current);
+        }, personaRef.current, modelModeRef.current);
       },
       onAudioLevel: (level: number) => {
         setAudioLevel(level);
@@ -77,7 +85,7 @@ export function useVoiceAgent() {
   const startListening = useCallback(async () => {
     continuousRef.current = true;
     setTargetState('listening');
-    setTimings(null);
+    // Don't clear timings — keep last turn's metrics visible
     await startVADListening();
   }, [startVADListening]);
 
@@ -112,6 +120,9 @@ export function useVoiceAgent() {
     audioLevel,
     persona,
     setPersona,
+    modelMode,
+    setModelMode,
+    isSmartReady: isSmartModelReady(),
     startListening,
     stopListening,
     clearMemory

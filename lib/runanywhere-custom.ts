@@ -29,6 +29,15 @@ const MODELS: CompactModelDef[] = [
     memoryRequirement: 250_000_000,
   },
   {
+    id: 'lfm2-1.2b-tool-q4_k_m',
+    name: 'LFM2 1.2B Tool Q4_K_M',
+    repo: 'LiquidAI/LFM2-1.2B-Tool-GGUF',
+    files: ['LFM2-1.2B-Tool-Q4_K_M.gguf'],
+    framework: LLMFramework.LlamaCpp,
+    modality: ModelCategory.Language,
+    memoryRequirement: 800_000_000,
+  },
+  {
     id: 'sherpa-onnx-whisper-tiny.en',
     name: 'Whisper Tiny English (ONNX)',
     url: 'https://huggingface.co/runanywhere/sherpa-onnx-whisper-tiny.en/resolve/main/sherpa-onnx-whisper-tiny.en.tar.gz',

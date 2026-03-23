@@ -37,6 +37,24 @@ export const GENERATION_CONFIG = {
   repeatPenalty: 1.15, // Strongly discourage repetitive filler phrases
 };
 
+const FAST_GENERATION_CONFIG = {
+  temperature: 0.3,
+  topP: 0.8,
+  maxTokens: 150,      // Short, punchy answers for speed
+  repeatPenalty: 1.2,
+};
+
+const SMART_GENERATION_CONFIG = {
+  temperature: 0.4,
+  topP: 0.9,
+  maxTokens: 400,      // More room for complex reasoning
+  repeatPenalty: 1.1,
+};
+
+export function getGenerationConfig(mode: 'fast' | 'smart') {
+  return mode === 'smart' ? SMART_GENERATION_CONFIG : FAST_GENERATION_CONFIG;
+}
+
 export function buildChatMLPrompt(system: string, user: string, history: Array<{role: string, content: string}> = []): string {
   let prompt = `<|im_start|>system\n${system}<|im_end|>\n`;
   

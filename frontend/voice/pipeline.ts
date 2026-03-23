@@ -1,7 +1,8 @@
 import { ExtensionPoint } from '@runanywhere/web';
 import { transcribeAudio } from './stt';
 import { synthesizeAudio, NativeAudioPlayer } from './tts';
-import { SYSTEM_PROMPT, buildChatMLPrompt, parseToolCalls, GENERATION_CONFIG, getPersonaPrompt, ToolCall } from '../llm/prompt';
+import { SYSTEM_PROMPT, buildChatMLPrompt, parseToolCalls, GENERATION_CONFIG, getGenerationConfig, getPersonaPrompt, ToolCall } from '../llm/prompt';
+import { selectModelId, type ModelMode } from '../llm/model';
 import { memory } from '../storage/memory';
 
 export type PipelineState = 'idle' | 'listening' | 'stt' | 'llm' | 'tts';
@@ -61,7 +62,7 @@ export class VoicePipeline {
     }
   }
 
-  public async processTurn(audioData: Float32Array, callbacks: PipelineCallbacks, persona: string = 'productivity') {
+  public async processTurn(audioData: Float32Array, callbacks: PipelineCallbacks, persona: string = 'productivity', modelMode: ModelMode = 'fast') {
     this.isCancelled = false;
     this.activeCancel = null;
     this._stopCurrentAudio();
@@ -95,7 +96,9 @@ export class VoicePipeline {
       const systemPrompt = getPersonaPrompt(persona);
       const fullPrompt = buildChatMLPrompt(systemPrompt, transcript, history.slice(0, -1));
 
-      const { stream, cancel } = await textGen.generateStream(fullPrompt, GENERATION_CONFIG);
+      const genConfig = getGenerationConfig(modelMode);
+      const activeModelId = selectModelId(modelMode);
+      const { stream, cancel } = await textGen.generateStream(fullPrompt, { ...genConfig, modelId: activeModelId });
       this.activeCancel = cancel;
 
       let fullResponse = '';
