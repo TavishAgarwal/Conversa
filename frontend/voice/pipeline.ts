@@ -221,6 +221,14 @@ export class VoicePipeline {
         }
       }
 
+      // Handle empty response fallback
+      if (fullResponse.trim().length === 0 && !this.isCancelled) {
+        fullResponse = "I'm sorry, I didn't quite catch that. Could you repeat it?";
+        callbacks.onLLMToken(fullResponse);
+        const { text: clean } = parseToolCalls(fullResponse);
+        ttsQueue.push(clean);
+      }
+
       // Signal producer is done and wait for consumer to finish
       llmDone = true;
       await playQueuePromise;
@@ -249,14 +257,22 @@ export class VoicePipeline {
 
         callbacks.onStateChange('idle');
         callbacks.onSpeakingDone();
-      } else if (fullResponse.trim().length > 0) {
-        await memory.addMessage({ role: 'assistant', content: fullResponse.trim() + "..." });
+      } else {
+        // Safety: ensure a full clear of state
         callbacks.onStateChange('idle');
         callbacks.onSpeakingDone();
       }
 
     } catch (e) {
       console.error('Pipeline Error:', e);
+      // Conversational error handling: tell the user what happened
+      const errorMsg = "I'm sorry, I encountered a temporary issue. Please try again.";
+      callbacks.onLLMToken(errorMsg);
+      try {
+        const player = await synthesizeAudio(errorMsg);
+        await player.waitForEnd();
+      } catch (err) { /* silent fail on audio error */ }
+      
       callbacks.onError(e as Error);
       callbacks.onStateChange('idle');
       callbacks.onSpeakingDone();
@@ -378,6 +394,14 @@ export class VoicePipeline {
         }
       }
 
+      // Handle empty response fallback
+      if (fullResponse.trim().length === 0 && !this.isCancelled) {
+        fullResponse = "I'm sorry, I didn't quite catch that. Could you repeat it?";
+        callbacks.onLLMToken(fullResponse);
+        const { text: clean } = parseToolCalls(fullResponse);
+        ttsQueue.push(clean);
+      }
+
       llmDone = true;
       await playQueuePromise;
 
@@ -410,8 +434,17 @@ export class VoicePipeline {
         callbacks.onSpeakingDone();
       }
 
+      callbacks.onStateChange('idle');
+      callbacks.onSpeakingDone();
     } catch (e) {
       console.error('Pipeline Error (text turn):', e);
+      const errorMsg = "I'm sorry, I encountered a temporary issue. Please try again.";
+      callbacks.onLLMToken(errorMsg);
+      try {
+        const player = await synthesizeAudio(errorMsg);
+        await player.waitForEnd();
+      } catch (err) { /* silent */ }
+      
       callbacks.onError(e as Error);
       callbacks.onStateChange('idle');
       callbacks.onSpeakingDone();
