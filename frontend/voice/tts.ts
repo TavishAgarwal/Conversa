@@ -7,58 +7,73 @@ export interface NativeAudioPlayer {
   stop: () => void;
   /** Resolves when the audio finishes playing naturally */
   waitForEnd: () => Promise<void>;
+  durationMs: number;
 }
 
 export async function synthesizeAudio(text: string, onStart?: () => void): Promise<NativeAudioPlayer> {
   const tts: any = ExtensionPoint.requireProvider('tts', '@runanywhere/web-onnx');
   
   if (onStart) onStart();
-  const ttsResult = await tts.synthesize(text, { speed: 1.0 });
-  
-  if (!audioCtx) {
-    audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-  }
-  if (audioCtx.state === 'suspended') {
-    await audioCtx.resume();
-  }
 
-  // Create native AudioBuffer from the raw Float32Array
-  const buffer = audioCtx.createBuffer(1, ttsResult.audioData.length, ttsResult.sampleRate);
-  buffer.copyToChannel(ttsResult.audioData, 0);
-
-  const source = audioCtx.createBufferSource();
-  source.buffer = buffer;
-  source.connect(audioCtx.destination);
-
-  // Create a promise that resolves when audio finishes playing
-  let endResolve: (() => void) | null = null;
-  const endPromise = new Promise<void>((resolve) => {
-    endResolve = resolve;
-  });
-
-  const stopPlayback = () => {
-    try {
-      source.stop();
-      source.disconnect();
-    } catch (e) {
-      // Ignore if already stopped
+  try {
+    const ttsResult = await tts.synthesize(text, { speed: 1.0 });
+    
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
-    // Also resolve the end promise so pipeline doesn't hang
-    if (endResolve) endResolve();
-  };
+    if (audioCtx.state === 'suspended') {
+      await audioCtx.resume();
+    }
 
-  source.onended = () => {
-    source.disconnect();
-    if (endResolve) endResolve();
-  };
+    const buffer = audioCtx.createBuffer(1, ttsResult.audioData.length, ttsResult.sampleRate);
+    buffer.copyToChannel(ttsResult.audioData, 0);
 
-  source.start(0);
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioCtx.destination);
 
-  // Fallback timeout based on audio duration to prevent infinite hang
-  const durationMs = (ttsResult.audioData.length / ttsResult.sampleRate) * 1000;
-  setTimeout(() => {
-    if (endResolve) endResolve();
-  }, durationMs + 2000); // 2s grace period
+    let endResolve: (() => void) | null = null;
+    const endPromise = new Promise<void>((resolve) => {
+      endResolve = resolve;
+    });
 
-  return { stop: stopPlayback, waitForEnd: () => endPromise };
+    const stopPlayback = () => {
+      try {
+        source.stop();
+        source.disconnect();
+      } catch (e) { }
+      if (endResolve) endResolve();
+    };
+
+    source.onended = () => {
+      source.disconnect();
+      if (endResolve) endResolve();
+    };
+
+    source.start(0);
+
+    const durationMs = (ttsResult.audioData.length / ttsResult.sampleRate) * 1000;
+    setTimeout(() => {
+      if (endResolve) endResolve();
+    }, durationMs + 2000);
+
+    return { stop: stopPlayback, waitForEnd: () => endPromise, durationMs };
+  } catch (err) {
+    console.warn("TTS fallback engaged due to synthesis error:", err);
+    // Provide a dummy player so the text rendering pipeline continues seamlessly
+    const estimatedDurationMs = text.length * 60; // ~60ms per character spoken
+    let cancelled = false;
+    let endResolve: (() => void) | null = null;
+    const endPromise = new Promise<void>((resolve) => { endResolve = resolve; });
+    
+    setTimeout(() => {
+        if (endResolve && !cancelled) endResolve();
+    }, estimatedDurationMs);
+
+    return {
+      stop: () => { cancelled = true; if (endResolve) endResolve(); },
+      waitForEnd: () => endPromise,
+      durationMs: estimatedDurationMs
+    };
+  }
 }

@@ -54,7 +54,21 @@ export function useVoiceAgent() {
           },
           onToolCall: (tool: ToolCall) => {
              if (tool.name === 'create_task') {
-               setTasks(prev => [...prev, { title: tool.arguments.title || 'New Task', done: false }]);
+               const taskTitle = tool.arguments.title || 'New Task';
+               // 1. Update local state for immediate sidebar feedback
+               setTasks(prev => [...prev, { title: taskTitle, done: false }]);
+               
+               // 2. Sync with global TasksScreen via localStorage
+               const stored = typeof window !== 'undefined' ? localStorage.getItem('conversa-tasks') : null;
+               const currentTasks = stored ? JSON.parse(stored) : [];
+               const newTask = {
+                 id: Date.now().toString(),
+                 text: taskTitle,
+                 status: 'pending',
+                 voiceAdded: true,
+                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+               };
+               localStorage.setItem('conversa-tasks', JSON.stringify([...currentTasks, newTask]));
              }
           },
           onTimings: (t) => setTimings(t),
@@ -110,7 +124,21 @@ export function useVoiceAgent() {
       onLLMComplete: () => {},
       onToolCall: (tool: ToolCall) => {
         if (tool.name === 'create_task') {
-          setTasks(prev => [...prev, { title: tool.arguments.title || 'New Task', done: false }]);
+          const taskTitle = tool.arguments.title || 'New Task';
+          // 1. Update local state
+          setTasks(prev => [...prev, { title: taskTitle, done: false }]);
+          
+          // 2. Sync with localStorage
+          const stored = typeof window !== 'undefined' ? localStorage.getItem('conversa-tasks') : null;
+          const currentTasks = stored ? JSON.parse(stored) : [];
+          const newTask = {
+            id: Date.now().toString(),
+            text: taskTitle,
+            status: 'pending',
+            voiceAdded: true,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          localStorage.setItem('conversa-tasks', JSON.stringify([...currentTasks, newTask]));
         }
       },
       onTimings: (t) => setTimings(t),

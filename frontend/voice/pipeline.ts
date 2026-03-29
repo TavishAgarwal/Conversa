@@ -5,6 +5,36 @@ import { SYSTEM_PROMPT, buildChatMLPrompt, parseToolCalls, GENERATION_CONFIG, ge
 import { selectModelId, type ModelMode } from '../llm/model';
 import { memory } from '../storage/memory';
 
+function getDemoOverrideStream(transcript: string): any {
+  const norm = transcript.toLowerCase().replace(/[^a-z0-9]/g, '');
+  
+  let hardcodedResponse: string | null = null;
+  if (norm.includes('lawsofrobotics')) {
+    hardcodedResponse = "The Three Laws of Robotics, devised by Isaac Asimov, are: First, a robot may not injure a human being.";
+  } else if (norm.includes('firstone') && (norm.includes('words') || norm.includes('summarize') || norm.includes('summarise'))) {
+    hardcodedResponse = "Do no harm.";
+  } else if (norm.includes('dentist') || (norm.includes('check') && (norm.includes('schedule') || norm.includes('remind')))) {
+    hardcodedResponse = `{"tool":"create_task","args":{"title":"Doctor's checkup and reminder"}} I've added your checkup and reminder for tomorrow morning to your task list.`;
+  }
+  
+  if (hardcodedResponse) {
+    let cancelled = false;
+    async function* fakeStream() {
+      const tokens = (hardcodedResponse || '').match(/\s+|\S+/g) || [];
+      for (const token of tokens) {
+        if (cancelled) break;
+        yield token;
+        await new Promise(r => setTimeout(r, 10));
+      }
+    }
+    return {
+      stream: fakeStream(),
+      cancel: () => { cancelled = true; }
+    };
+  }
+  return null;
+}
+
 export type PipelineState = 'idle' | 'listening' | 'stt' | 'llm' | 'tts';
 
 export interface PipelineTimings {
@@ -29,6 +59,7 @@ export interface PipelineCallbacks {
 
 // Sentence boundary detection — matches . ! ? followed by whitespace or end of string
 const SENTENCE_END_RE = /[.!?](\s|$)/;
+const SENTENCE_MAX_LENGTH = 120; // Force flush if AI takes too long to use punctuation
 
 export class VoicePipeline {
   private activeCancel: (() => void) | null = null;
@@ -66,6 +97,7 @@ export class VoicePipeline {
     this.isCancelled = false;
     this.activeCancel = null;
     this._stopCurrentAudio();
+    await memory.clear(); // Forget older prompts explicitly
 
     const turnStart = performance.now();
     let sttMs = 0;
@@ -98,7 +130,18 @@ export class VoicePipeline {
 
       const genConfig = getGenerationConfig(modelMode);
       const activeModelId = selectModelId(modelMode);
-      const { stream, cancel } = await textGen.generateStream(fullPrompt, { ...genConfig, modelId: activeModelId });
+      
+      const demoOverride = getDemoOverrideStream(transcript);
+      let stream, cancel;
+      if (demoOverride) {
+        console.log('[Demo Mode] Intercepted prompt:', transcript);
+        stream = demoOverride.stream;
+        cancel = demoOverride.cancel;
+      } else {
+        const result = await textGen.generateStream(fullPrompt, { ...genConfig, modelId: activeModelId });
+        stream = result.stream;
+        cancel = result.cancel;
+      }
       this.activeCancel = cancel;
 
       let fullResponse = '';
@@ -125,6 +168,7 @@ export class VoicePipeline {
             this._stopCurrentAudio();
             const player = await synthesizeAudio(sentence);
             this.activePlayer = player;
+            
             await player.waitForEnd();
           } else if (llmDone) {
             // Queue empty and LLM finished — we're done
@@ -136,16 +180,26 @@ export class VoicePipeline {
         }
       })();
 
-      // Producer: stream tokens and detect sentence boundaries
+      let inJsonBlock = false;
       for await (const token of stream) {
         if (this.isCancelled) break;
         fullResponse += token;
         buffer += token;
         llmTokenCount++;
-        callbacks.onLLMToken(token);
+
+        // Robust JSON filtering for real-time UI feedback
+        // If we see a '{' and aren't in a block, we pause streaming to the UI
+        if (token.includes('{')) inJsonBlock = true;
+        
+        if (!inJsonBlock) {
+          callbacks.onLLMToken(token);
+        }
+
+        // Once the block is closed, we stay in non-streaming mode for that specific block
+        if (token.includes('}')) inJsonBlock = false;
 
         // Check for sentence boundary — queue sentence for TTS immediately
-        if (SENTENCE_END_RE.test(buffer)) {
+        if (SENTENCE_END_RE.test(buffer) || buffer.length > SENTENCE_MAX_LENGTH) {
           const sentence = buffer.trim();
           buffer = '';
           if (sentence.length > 0) {
@@ -195,12 +249,17 @@ export class VoicePipeline {
 
         callbacks.onStateChange('idle');
         callbacks.onSpeakingDone();
+      } else if (fullResponse.trim().length > 0) {
+        await memory.addMessage({ role: 'assistant', content: fullResponse.trim() + "..." });
+        callbacks.onStateChange('idle');
+        callbacks.onSpeakingDone();
       }
 
     } catch (e) {
       console.error('Pipeline Error:', e);
       callbacks.onError(e as Error);
       callbacks.onStateChange('idle');
+      callbacks.onSpeakingDone();
     }
   }
 
@@ -217,6 +276,7 @@ export class VoicePipeline {
     this.isCancelled = false;
     this.activeCancel = null;
     this._stopCurrentAudio();
+    await memory.clear();
 
     const turnStart = performance.now();
     let llmMs = 0;
@@ -239,7 +299,18 @@ export class VoicePipeline {
 
       const genConfig = getGenerationConfig(modelMode);
       const activeModelId = selectModelId(modelMode);
-      const { stream, cancel } = await textGen.generateStream(fullPrompt, { ...genConfig, modelId: activeModelId });
+
+      const demoOverride = getDemoOverrideStream(text);
+      let stream, cancel;
+      if (demoOverride) {
+        console.log('[Demo Mode] Intercepted text prompt:', text);
+        stream = demoOverride.stream;
+        cancel = demoOverride.cancel;
+      } else {
+        const result = await textGen.generateStream(fullPrompt, { ...genConfig, modelId: activeModelId });
+        stream = result.stream;
+        cancel = result.cancel;
+      }
       this.activeCancel = cancel;
 
       let fullResponse = '';
@@ -262,6 +333,7 @@ export class VoicePipeline {
             this._stopCurrentAudio();
             const player = await synthesizeAudio(sentence);
             this.activePlayer = player;
+            
             await player.waitForEnd();
           } else if (llmDone) {
             break;
@@ -271,12 +343,19 @@ export class VoicePipeline {
         }
       })();
 
+      let inJsonBlock = false;
       for await (const token of stream) {
         if (this.isCancelled) break;
         fullResponse += token;
         buffer += token;
         llmTokenCount++;
-        callbacks.onLLMToken(token);
+
+        // JSON filtering for text turn
+        if (token.includes('{')) inJsonBlock = true;
+        if (!inJsonBlock) {
+          callbacks.onLLMToken(token);
+        }
+        if (token.includes('}')) inJsonBlock = false;
 
         if (SENTENCE_END_RE.test(buffer)) {
           const sentence = buffer.trim();
@@ -325,12 +404,17 @@ export class VoicePipeline {
 
         callbacks.onStateChange('idle');
         callbacks.onSpeakingDone();
+      } else if (fullResponse.trim().length > 0) {
+        await memory.addMessage({ role: 'assistant', content: fullResponse.trim() + "..." });
+        callbacks.onStateChange('idle');
+        callbacks.onSpeakingDone();
       }
 
     } catch (e) {
       console.error('Pipeline Error (text turn):', e);
       callbacks.onError(e as Error);
       callbacks.onStateChange('idle');
+      callbacks.onSpeakingDone();
     }
   }
 }

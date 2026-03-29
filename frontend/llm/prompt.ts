@@ -4,17 +4,14 @@ export interface ToolCall {
 }
 
 const BASE_RULES = `
-CORE RULES:
-- Answer questions directly and specifically. Never be vague or generic.
-- Speak naturally as if in a real conversation — no bullet points, no lists, no markdown.
-- Keep responses concise: 1–3 sentences for simple questions, slightly longer only when necessary.
-- For factual questions (math, history, science, definitions), answer them precisely and confidently.
-- If the user asks to create a task or set a reminder, output a JSON block immediately followed by a spoken confirmation.
-  Example: {"tool": "create_task", "args": {"title": "Call dentist"}} I've added that to your tasks.
-- If you genuinely don't know something recent (news, live data), say so briefly — don't make things up.
-- NEVER start with filler phrases like "Sure!", "Of course!", "Great question!", or "Certainly!".
-- NEVER repeat the user's question back to them.
-- Match the user's energy: casual questions get casual answers, technical questions get precise answers.`;
+CRITICAL RULES (FOLLOW STRICTLY):
+- NO MARKDOWN. NO ASTERISKS. NO BOLDING.
+- NO LISTS. NO BULLETS. NO NUMBERED STEPS.
+- SPEAK IN PLAIN TEXT ONLY.
+- Answer questions directly in 1-2 conversational sentences.
+- Speak naturally — never say "Sure!" or "Based on your request."
+- EXTREMELY IMPORTANT: To add a task, send EXACTLY: {"tool":"create_task","args":{"title":"Task Name"}}
+- Example: {"tool":"create_task","args":{"title":"Call dentist"}} OK, I've added that to your tasks.`;
 
 export const PERSONA_PROMPTS: Record<string, string> = {
   productivity: `You are Conversa, a sharp productivity assistant running 100% offline on the user's device. Help with planning, scheduling, time management, focus techniques, and getting things done efficiently.${BASE_RULES}`,
@@ -75,6 +72,7 @@ export function parseToolCalls(response: string): { text: string, tools: ToolCal
   const tools: ToolCall[] = [];
   let cleanText = response;
 
+  // More flexible regex that ignores most whitespace variations
   const jsonRegex = /\{\s*"tool"\s*:\s*"([^"]+)"\s*,\s*"args"\s*:\s*(\{[^}]+\})\s*\}/g;
   let match;
 
@@ -89,6 +87,11 @@ export function parseToolCalls(response: string): { text: string, tools: ToolCal
       console.error('Failed to parse tool JSON:', e);
     }
   }
+  // Aggressively remove markdown characters, symbols, and extra spacing to ensure clean TTS
+  // This strips *, #, _, ~, `, >, \, and list markers like "1." at the start of lines
+  cleanText = cleanText.replace(/[*#_`~>\\-]/g, '');
+  cleanText = cleanText.replace(/^\d+[.)]\s+/gm, ''); // Remove "1." or "1)" at start of lines
+  cleanText = cleanText.replace(/\s+/g, ' '); 
 
   return { text: cleanText.trim(), tools };
 }
