@@ -10,7 +10,7 @@ import { StatusBar } from '@/components/conversa/status-bar';
 import { FloatingControls } from '@/components/conversa/floating-controls';
 import { NetworkMonitor } from '@/components/conversa/network-monitor';
 import { LatencyMetrics } from '@/components/conversa/LatencyMetrics';
-import { QuickDemo } from '@/components/conversa/quick-demo';
+
 
 export const VoiceUI: React.FC = () => {
   const { 
@@ -98,12 +98,7 @@ export const VoiceUI: React.FC = () => {
         isOffline={isOffline}
       />
 
-      {/* Task 1: Quick Demo button */}
-      <QuickDemo
-        onProcessText={processTextInput}
-        onSetPersona={setPersona}
-        onSwitchToVoice={() => { /* already on voice tab */ }}
-      />
+
 
       {/* Task 5: AI Ready indicator */}
       {showAiReady && (

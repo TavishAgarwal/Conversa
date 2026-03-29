@@ -98,7 +98,7 @@ export function useVoiceAgent() {
   }, []);
   
   const processTextInput = useCallback(async (text: string) => {
-    // Used by Quick Demo — feeds text directly into LLM → TTS pipeline
+    // Feeds text directly into LLM → TTS pipeline (e.g. for chat or automation)
     setAiText('');
     setUserText(text);
     setTargetState('llm');

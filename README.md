@@ -21,11 +21,6 @@ In a world dependent on cloud APIs and expensive subscriptions, **Conversa** bri
 - **Hybrid System & Tool Calling**: 
   - ⚡ **Fast Mode (LFM2 350M, default)**: Near-instant responses for general conversational flow.
   - 🧠 **Smart Mode (LFM2 1.2B)**: Background-loaded powerhouse optimized for complex reasoning and seamless **Tool Calling & Execution**.
-- **HackXtreme Demo Optimized**: 
-  - **Network Monitor**: Real-time on-screen badge proving exactly 0 external network requests.
-  - **Latency Metrics**: Live tracking with a direct Local vs Cloud speed advantage comparison.
-  - **Interactive Demos**: Built-in, automated "Quick Demo" button and visual Demo Guide for judges to instantly test persona switching, general knowledge, and tool execution.
-  - **AI Ready Preload State**: Real-time system panel visual indicator confirming when models are securely cached in OPFS and prepared for offline use.
 - **Robust Local Infrastructure**: Persistent conversational memory via IndexedDB, visibly integrated `@runanywhere/web` SDK, and active anti-hallucination guardrails.
 
 ## 🏗️ Technical Architecture

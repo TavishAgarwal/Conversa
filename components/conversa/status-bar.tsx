@@ -13,17 +13,19 @@ export function StatusBar({ micActive, isThinking, isOffline, className }: Statu
   return (
     <div className={cn("flex items-center gap-3 flex-wrap justify-center", className)}>
       {/* Offline badge */}
-      <div
-        className={cn(
-          "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border",
-          "bg-emerald-950/60 border-emerald-700/50 text-emerald-400"
-        )}
-      >
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
-        </svg>
-        Offline
-      </div>
+      {isOffline && (
+        <div
+          className={cn(
+            "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border animate-in fade-in duration-300",
+            "bg-emerald-950/60 border-emerald-700/50 text-emerald-400"
+          )}
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+          </svg>
+          Offline
+        </div>
+      )}
 
       {/* Mic status */}
       <div
