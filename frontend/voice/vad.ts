@@ -22,10 +22,14 @@ export class VoiceActivityDetector {
         if (activity === SpeechActivity.Started) {
           callbacks.onSpeechStart?.();
         } else if (activity === SpeechActivity.Ended) {
-          const segment = RunAnywhereVAD.popSpeechSegment();
-          if (segment && segment.samples.length > 1600) {
-            callbacks.onSpeechEnd?.(segment.samples);
-          }
+          // Wait 800-1200ms after VAD signals end before extracting the segment
+          // This prevents cutting off the end of the user's speech prematurely
+          setTimeout(() => {
+            const segment = RunAnywhereVAD.popSpeechSegment();
+            if (segment && segment.samples.length > 1600) {
+              callbacks.onSpeechEnd?.(segment.samples);
+            }
+          }, 1000); // 1000ms post-speech silence wait
         }
       });
 

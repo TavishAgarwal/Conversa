@@ -5,35 +5,8 @@ import { SYSTEM_PROMPT, buildChatMLPrompt, parseToolCalls, GENERATION_CONFIG, ge
 import { selectModelId, type ModelMode } from '../llm/model';
 import { memory } from '../storage/memory';
 
-function getDemoOverrideStream(transcript: string): any {
-  const norm = transcript.toLowerCase().replace(/[^a-z0-9]/g, '');
-  
-  let hardcodedResponse: string | null = null;
-  if (norm.includes('lawsofrobotics')) {
-    hardcodedResponse = "The Three Laws of Robotics, devised by Isaac Asimov, are: First, a robot may not injure a human being.";
-  } else if (norm.includes('firstone') && (norm.includes('words') || norm.includes('summarize') || norm.includes('summarise'))) {
-    hardcodedResponse = "Do no harm.";
-  } else if (norm.includes('dentist') || (norm.includes('check') && (norm.includes('schedule') || norm.includes('remind')))) {
-    hardcodedResponse = `{"tool":"create_task","args":{"title":"Doctor's checkup and reminder"}} I've added your checkup and reminder for tomorrow morning to your task list.`;
-  }
-  
-  if (hardcodedResponse) {
-    let cancelled = false;
-    async function* fakeStream() {
-      const tokens = (hardcodedResponse || '').match(/\s+|\S+/g) || [];
-      for (const token of tokens) {
-        if (cancelled) break;
-        yield token;
-        await new Promise(r => setTimeout(r, 10));
-      }
-    }
-    return {
-      stream: fakeStream(),
-      cancel: () => { cancelled = true; }
-    };
-  }
-  return null;
-}
+// REMOVED: getDemoOverrideStream() - all hardcoded responses have been removed.
+// Every assistant response must come exclusively from the real LLM via generateStream().
 
 export type PipelineState = 'idle' | 'listening' | 'stt' | 'llm' | 'tts';
 
@@ -131,17 +104,9 @@ export class VoicePipeline {
       const genConfig = getGenerationConfig(modelMode);
       const activeModelId = selectModelId(modelMode);
       
-      const demoOverride = getDemoOverrideStream(transcript);
-      let stream, cancel;
-      if (demoOverride) {
-        console.log('[Demo Mode] Intercepted prompt:', transcript);
-        stream = demoOverride.stream;
-        cancel = demoOverride.cancel;
-      } else {
-        const result = await textGen.generateStream(fullPrompt, { ...genConfig, modelId: activeModelId });
-        stream = result.stream;
-        cancel = result.cancel;
-      }
+      const result = await textGen.generateStream(fullPrompt, { ...genConfig, modelId: activeModelId });
+      const stream = result.stream;
+      const cancel = result.cancel;
       this.activeCancel = cancel;
 
       let fullResponse = '';
@@ -221,14 +186,6 @@ export class VoicePipeline {
         }
       }
 
-      // Handle empty response fallback
-      if (fullResponse.trim().length === 0 && !this.isCancelled) {
-        fullResponse = "I'm sorry, I didn't quite catch that. Could you repeat it?";
-        callbacks.onLLMToken(fullResponse);
-        const { text: clean } = parseToolCalls(fullResponse);
-        ttsQueue.push(clean);
-      }
-
       // Signal producer is done and wait for consumer to finish
       llmDone = true;
       await playQueuePromise;
@@ -265,14 +222,8 @@ export class VoicePipeline {
 
     } catch (e) {
       console.error('Pipeline Error:', e);
-      // Conversational error handling: tell the user what happened
-      const errorMsg = "I'm sorry, I encountered a temporary issue. Please try again.";
-      callbacks.onLLMToken(errorMsg);
-      try {
-        const player = await synthesizeAudio(errorMsg);
-        await player.waitForEnd();
-      } catch (err) { /* silent fail on audio error */ }
-      
+      // On error: don't show fallback message, just report the error
+      // The UI will show appropriate error state to the user
       callbacks.onError(e as Error);
       callbacks.onStateChange('idle');
       callbacks.onSpeakingDone();
@@ -316,17 +267,9 @@ export class VoicePipeline {
       const genConfig = getGenerationConfig(modelMode);
       const activeModelId = selectModelId(modelMode);
 
-      const demoOverride = getDemoOverrideStream(text);
-      let stream, cancel;
-      if (demoOverride) {
-        console.log('[Demo Mode] Intercepted text prompt:', text);
-        stream = demoOverride.stream;
-        cancel = demoOverride.cancel;
-      } else {
-        const result = await textGen.generateStream(fullPrompt, { ...genConfig, modelId: activeModelId });
-        stream = result.stream;
-        cancel = result.cancel;
-      }
+      const result = await textGen.generateStream(fullPrompt, { ...genConfig, modelId: activeModelId });
+      const stream = result.stream;
+      const cancel = result.cancel;
       this.activeCancel = cancel;
 
       let fullResponse = '';
@@ -394,14 +337,6 @@ export class VoicePipeline {
         }
       }
 
-      // Handle empty response fallback
-      if (fullResponse.trim().length === 0 && !this.isCancelled) {
-        fullResponse = "I'm sorry, I didn't quite catch that. Could you repeat it?";
-        callbacks.onLLMToken(fullResponse);
-        const { text: clean } = parseToolCalls(fullResponse);
-        ttsQueue.push(clean);
-      }
-
       llmDone = true;
       await playQueuePromise;
 
@@ -438,13 +373,6 @@ export class VoicePipeline {
       callbacks.onSpeakingDone();
     } catch (e) {
       console.error('Pipeline Error (text turn):', e);
-      const errorMsg = "I'm sorry, I encountered a temporary issue. Please try again.";
-      callbacks.onLLMToken(errorMsg);
-      try {
-        const player = await synthesizeAudio(errorMsg);
-        await player.waitForEnd();
-      } catch (err) { /* silent */ }
-      
       callbacks.onError(e as Error);
       callbacks.onStateChange('idle');
       callbacks.onSpeakingDone();
