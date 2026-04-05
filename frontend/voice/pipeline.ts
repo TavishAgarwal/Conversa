@@ -146,6 +146,8 @@ export class VoicePipeline {
       })();
 
       let inJsonBlock = false;
+      let lastYieldTime = performance.now();
+
       for await (const token of stream) {
         if (this.isCancelled) break;
         fullResponse += token;
@@ -162,6 +164,12 @@ export class VoicePipeline {
 
         // Once the block is closed, we stay in non-streaming mode for that specific block
         if (token.includes('}')) inJsonBlock = false;
+
+        // Yield to the event loop every 30ms to prevent the UI from freezing
+        if (performance.now() - lastYieldTime > 30) {
+          await new Promise(r => setTimeout(r, 0));
+          lastYieldTime = performance.now();
+        }
 
         // Check for sentence boundary — queue sentence for TTS immediately
         if (SENTENCE_END_RE.test(buffer) || buffer.length > SENTENCE_MAX_LENGTH) {
@@ -303,6 +311,8 @@ export class VoicePipeline {
       })();
 
       let inJsonBlock = false;
+      let lastYieldTime = performance.now();
+
       for await (const token of stream) {
         if (this.isCancelled) break;
         fullResponse += token;
@@ -315,6 +325,12 @@ export class VoicePipeline {
           callbacks.onLLMToken(token);
         }
         if (token.includes('}')) inJsonBlock = false;
+
+        // Yield to the event loop every 30ms to prevent the UI from freezing
+        if (performance.now() - lastYieldTime > 30) {
+          await new Promise(r => setTimeout(r, 0));
+          lastYieldTime = performance.now();
+        }
 
         if (SENTENCE_END_RE.test(buffer)) {
           const sentence = buffer.trim();
